@@ -3,6 +3,7 @@ package Controller;
 import Model.Game;
 import Model.GameCollection;
 import View.UserPanel;
+import java.util.*;
 
 public class GameController {
 
@@ -18,13 +19,23 @@ public class GameController {
     }
     
     private void addSampleGames() {
-    model.addGame(new Game("Minecraft", "Sandbox", "PC", 2011, 250, 5));
-    model.addGame(new Game("God of War", "Action", "PlayStation", 2018, 45, 5));
-    model.addGame(new Game("The Last of Us", "Survival", "PlayStation", 2013, 25, 5));
-    model.addGame(new Game("Red Dead Redemption 2", "Action-Adventure", "PlayStation", 2018, 80, 5));
-    model.addGame(new Game("Resident Evil 4", "Horror", "PC", 2023, 35, 4));
+        Calendar cal = Calendar.getInstance();
 
-    view.refreshGamesTable(model);
+        cal.set(2023, Calendar.OCTOBER, 15);
+        model.addGame(new Game("Minecraft", "Sandbox", "PC", 2011, 250, "Completed", cal.getTime(), 5));
+
+        cal.set(2023, Calendar.DECEMBER, 5);
+        model.addGame(new Game("God of War", "Action", "PlayStation", 2018, 45, "Completed", cal.getTime(), 5));
+
+        cal.set(2024, Calendar.FEBRUARY, 20);
+        model.addGame(new Game("The Last of Us", "Survival", "PlayStation", 2013, 25, "Completed", cal.getTime(), 5));
+
+        model.addGame(new Game("Red Dead Redemption 2", "Action-Adventure", "PlayStation", 2018, 80, "In Progress", null, 5));
+
+        cal.set(2024, Calendar.APRIL, 15);
+        model.addGame(new Game("Resident Evil 4", "Horror", "PC", 2023, 35, "Completed", cal.getTime(), 4));
+
+        view.refreshGamesTable(model);
     }
 
     private void initEvents() {
@@ -32,13 +43,21 @@ public class GameController {
         view.setAddGameListener(e -> {
             try {
                 Game game = view.getGameFromInput();
-                model.addGame(game);
+
+                boolean added = model.addGame(game);
+                if (!added) {
+                    view.showError("Game already exists");
+                    return;
+                }
+
                 view.refreshGamesTable(model);
                 view.showError("Game added successfully");
+
             } catch (IllegalArgumentException ex) {
                 view.showError(ex.getMessage());
             }
         });
+
 
         view.setWishlistListener(e -> {
             try {

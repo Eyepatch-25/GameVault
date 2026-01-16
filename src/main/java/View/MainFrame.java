@@ -10,37 +10,54 @@ package View;
  * @author Admin
  */
 import javax.swing.*;
-import java.awt.*;
-import Model.GameCollection;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.util.*;
 import Controller.GameController;
+import Model.Game;
+import Model.GameCollection; 
+import Controller.DataManager;
 
 public class MainFrame extends javax.swing.JFrame {
     
     private CardLayout cardLayout;
     private JPanel mainContainer;
+    private static java.util.Map<String, String> registeredUsers = new java.util.HashMap<>();
+    private DataManager dataManager;
+
     /**
      * Creates new form MainFrame
      */
     public MainFrame() {
-        initComponents();
-        
-        cardLayout = new CardLayout();
-        mainContainer = new JPanel(cardLayout);
+            initComponents();
+            
+            dataManager = DataManager.getInstance();
 
-        // ROLE selection tab (existing UI)
-        mainContainer.add(getContentPane(), "ROLE");
+            cardLayout = new CardLayout();
+            mainContainer = new JPanel(cardLayout);
 
-        // Login tabs created via methods
-        mainContainer.add(UserLoginPanel(), "USER_LOGIN");
-        mainContainer.add(AdminLoginPanel(), "ADMIN_LOGIN");
+            // Create a new panel that contains jPanel1 and jPanel2 (the role selection UI)
+            JPanel rolePanel = new JPanel(new BorderLayout());
+            rolePanel.add(jPanel2, BorderLayout.NORTH);
+            rolePanel.add(jPanel1, BorderLayout.CENTER);
 
-        setContentPane(mainContainer);
-        cardLayout.show(mainContainer, "ROLE");
+            // Login tabs created via methods
+            mainContainer.add(rolePanel, "ROLE");
+            mainContainer.add(UserLoginPanel(), "USER_LOGIN");
+            mainContainer.add(AdminLoginPanel(), "ADMIN_LOGIN");
 
-        setTitle("GameVault");
-        setSize(900, 600);
-        setLocationRelativeTo(null);
-    }
+            setContentPane(mainContainer);
+            cardLayout.show(mainContainer, "ROLE");
+
+            setTitle("GameVault");
+            setSize(900, 600);
+            setLocationRelativeTo(null);
+        }
 
     private JPanel UserLoginPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
@@ -52,57 +69,149 @@ public class MainFrame extends javax.swing.JFrame {
 
         JTextField username = new JTextField(15);
         JPasswordField password = new JPasswordField(15);
-
+        
+        JButton register = new JButton("Register");
         JButton login = new JButton("Login");
         JButton back = new JButton("Back");
 
 
+
         login.addActionListener(e -> {
-            String user = username.getText().trim();
-            String pass = new String(password.getPassword()).trim();
+        String user = username.getText().trim();
+        String pass = new String(password.getPassword()).trim();
 
-            if (user.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Username cannot be empty");
-                return;
-            }
-
-            if (pass.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Password cannot be empty");
-                return;
-            }
-
-            // SUCCESS — only reached if validation passes
+        // Admin allowed to login as user
+        if (user.equals("Ilesh Maskey") && pass.equals("24046585")) {
             JOptionPane.showMessageDialog(this, "User login successful");
 
-            UserPanel userPanel = new UserPanel();
-            GameCollection collection = new GameCollection();
-            new GameController(collection, userPanel);
+            // Load admin's games from DataManager
+            String userId = "U001"; // Admin's user ID
+            Map<String, List<Game>> userGames = dataManager.getUserGames();
 
+            // Create GameCollection with admin's actual games
+            GameCollection collection = new GameCollection();
+            if (userGames.containsKey(userId)) {
+                for (Game game : userGames.get(userId)) {
+                    collection.addGame(game);
+                }
+            }
+
+            UserPanel userPanel = new UserPanel(collection, userGames);
+            userPanel.setCurrentUser(userId);
             userPanel.setVisible(true);
             this.dispose();
+        } 
+        // Registered user check using DataManager
+        else if (!dataManager.validateLogin(user, pass)) {
+            JOptionPane.showMessageDialog(
+                this,
+                "Invalid credentials!",
+                "Login Failed",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        } else {
+            JOptionPane.showMessageDialog(this, "User login successful");
+
+            // Get user ID from DataManager
+            String userId = dataManager.findUserIdByUsername(user);
+
+            if (userId == null) {
+                JOptionPane.showMessageDialog(this, "User ID not found!");
+                return;
+            }
+
+            // Get user's games from DataManager
+            Map<String, List<Game>> userGames = dataManager.getUserGames();
+
+            // Create GameCollection with user's actual games
+            GameCollection collection = new GameCollection();
+            if (userGames.containsKey(userId)) {
+                for (Game game : userGames.get(userId)) {
+                    collection.addGame(game);
+                }
+            }
+
+            UserPanel userPanel = new UserPanel(collection, userGames);
+            userPanel.setCurrentUser(userId);
+            userPanel.setVisible(true);
+            this.dispose();
+        }
+    });
+
+        
+        back.addActionListener(e -> {
+        cardLayout.show(mainContainer, "ROLE");
         });
 
 
+        register.addActionListener(e -> {
+            String user = username.getText().trim();
+            String pass = new String(password.getPassword()).trim();
 
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+            if (user.isEmpty() || pass.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Username and Password required");
+                return;
+            }
+
+            // Use DataManager instead of local map
+            dataManager = DataManager.getInstance();
+
+            // Check if user already exists
+            String existingUserId = dataManager.findUserIdByUsername(user);
+            if (existingUserId != null) {
+                JOptionPane.showMessageDialog(this, "User already registered!");
+                return;
+            }
+
+            // Register user through DataManager
+            String newUserId = dataManager.registerUser(user, pass);
+
+            JOptionPane.showMessageDialog(
+                this,
+                "User registered successfully! User ID: " + newUserId,
+                "Registration Complete",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+        });
+
+
+        gbc.gridx = 0; 
+        gbc.gridy = 0; 
+        gbc.gridwidth = 2;
         panel.add(title, gbc);
 
-        gbc.gridy++; gbc.gridwidth = 1;
+        // Username
+        gbc.gridy++;
+        gbc.gridwidth = 1;
         panel.add(new JLabel("Username:"), gbc);
+
         gbc.gridx = 1;
         panel.add(username, gbc);
 
-        gbc.gridx = 0; gbc.gridy++;
+        // Password
+        gbc.gridx = 0; 
+        gbc.gridy++;
         panel.add(new JLabel("Password:"), gbc);
+
         gbc.gridx = 1;
         panel.add(password, gbc);
 
-        gbc.gridx = 0; gbc.gridy++;
+        // Buttons — SAME COLUMN, DIFFERENT ROWS
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(register, gbc);
+
+        gbc.gridy++;
         panel.add(login, gbc);
-        gbc.gridx = 1;
+
+        gbc.gridy++;
         panel.add(back, gbc);
 
         return panel;
+
+
     }
 
     private JPanel AdminLoginPanel() {
@@ -125,21 +234,31 @@ public class MainFrame extends javax.swing.JFrame {
             String admin = adminId.getText().trim();
             String pass = new String(password.getPassword()).trim();
 
-            if (admin.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Admin ID cannot be empty");
-                return;
+            if (admin.equals("Ilesh Maskey") && pass.equals("24046585")) {
+                JOptionPane.showMessageDialog(this, "Admin login successful");
+
+                // Open AdminPanel
+                GameCollection collection = new GameCollection();
+                Map<String, List<Game>> userGames = new LinkedHashMap<>();
+                AdminPanel adminPanel = new AdminPanel(collection, userGames);
+                adminPanel.setVisible(true);
+                this.dispose();
+            } else {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Invalid admin credentials!",
+                    "Login Failed",
+                    JOptionPane.ERROR_MESSAGE
+                );
             }
-
-            if (pass.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Password cannot be empty");
-                return;
-            }
-
-            JOptionPane.showMessageDialog(this, "Admin login successful");
-
-            new AdminPanel().setVisible(true);
-            this.dispose();
         });
+
+
+        
+        back.addActionListener(e -> {
+        cardLayout.show(mainContainer, "ROLE");
+        });
+
 
 
 
@@ -317,23 +436,21 @@ public class MainFrame extends javax.swing.JFrame {
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel1)
                     .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(26, Short.MAX_VALUE))
+                .addContainerGap(32, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
+            .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                 .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addContainerGap())
-            .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap()
                 .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))

@@ -70,25 +70,46 @@ public class GameCollection {
         );
     }
     
-    public void removeGameByTitle(String title) {
-    if (title == null || title.trim().isEmpty()) {
-        throw new IllegalArgumentException("Title cannot be empty");
+    public boolean removeGameByTitle(String title) {
+        if (title == null || title.trim().isEmpty()) {
+            return false;
+        }
+
+        Game toRemove = null;
+        for (Game g : games) {
+            if (g.getTitle().equalsIgnoreCase(title.trim())) {
+                toRemove = g;
+                break;
+            }
+        }
+
+        if (toRemove != null) {
+            games.remove(toRemove);
+            return true;
+        }
+        return false;
     }
-
-    Game toRemove = null;
-
-    for (Game g : games) {
-        if (g.getTitle().equalsIgnoreCase(title.trim())) {
-            toRemove = g;
-            break;
+    
+    // Add these missing methods to GameCollection.java
+    public void addToFavorites(Game game) {
+        if (!favoriteGames.contains(game)) {
+            favoriteGames.add(game);
         }
     }
 
-    if (toRemove == null) {
-        throw new IllegalArgumentException("Game not found");
+    public boolean removeFromFavorites(Game game) {
+        return favoriteGames.remove(game);
     }
-
-    games.remove(toRemove);
-}
-
+    
+    public boolean containsGame(Game game) {
+        for (Game g : games) {
+            if (g.getTitle().equalsIgnoreCase(game.getTitle()) &&
+                g.getPlatform().equalsIgnoreCase(game.getPlatform())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    
 }

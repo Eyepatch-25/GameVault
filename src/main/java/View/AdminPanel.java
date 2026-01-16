@@ -9,19 +9,305 @@ package View;
  *
  * @author Admin
  */
+
 import View.MainFrame;
 import javax.swing.*;
-import java.awt.*;
+import javax.swing.table.DefaultTableModel;
+import java.util.*;
+import java.text.SimpleDateFormat;
+import Model.Game;
+import Model.GameCollection;
+import Controller.DataManager;
 
 public class AdminPanel extends javax.swing.JFrame {
     
+    private GameCollection gameCollection;
+    private Map<String, List<Game>> userGames = new LinkedHashMap<>();
+    private Map<String, String[]> userCredentials = new LinkedHashMap<>();
+    private DataManager dataManager;
 
+    private void searchUserById() {
+        String searchId = jTextField4.getText().trim();
+
+        if (searchId.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Enter User ID");
+            return;
+        }
+
+        // Get all users
+        List<String[]> allUsers = new ArrayList<>();
+        for (Map.Entry<String, String[]> entry : dataManager.getUserCredentials().entrySet()) {
+            allUsers.add(new String[]{entry.getKey(), entry.getValue()[0], entry.getValue()[1]});
+        }
+
+        // Bubble Sort
+        for (int i = 0; i < allUsers.size() - 1; i++) {
+            for (int j = 0; j < allUsers.size() - i - 1; j++) {
+                if (allUsers.get(j)[0].compareToIgnoreCase(allUsers.get(j + 1)[0]) > 0) {
+                    String[] temp = allUsers.get(j);
+                    allUsers.set(j, allUsers.get(j + 1));
+                    allUsers.set(j + 1, temp);
+                }
+            }
+        }
+
+        // Binary Search
+        int left = 0;
+        int right = allUsers.size() - 1;
+        boolean found = false;
+
+        while (left <= right && !found) {
+            int mid = (left + right) / 2;
+            String currentId = allUsers.get(mid)[0].toLowerCase();
+
+            if (currentId.contains(searchId.toLowerCase())) {
+                // Show result
+                DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+                model.setRowCount(0);
+                model.addRow(new Object[]{
+                    allUsers.get(mid)[0], 
+                    allUsers.get(mid)[1], 
+                    allUsers.get(mid)[2]
+                });
+                JOptionPane.showMessageDialog(this, "User found!");
+                found = true;
+            } else if (currentId.compareTo(searchId.toLowerCase()) > 0) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+
+        if (!found) {
+            JOptionPane.showMessageDialog(this, "User not found");
+        }
+    }
+    
+    private void searchGamesByUserId() {
+        String searchId = jTextField5.getText().trim();
+
+        if (searchId.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Enter User ID");
+            return;
+        }
+
+        // Get all users who have games
+        List<String> allUserIds = new ArrayList<>(dataManager.getUserGames().keySet());
+
+        // Bubble Sort
+        for (int i = 0; i < allUserIds.size() - 1; i++) {
+            for (int j = 0; j < allUserIds.size() - i - 1; j++) {
+                if (allUserIds.get(j).compareToIgnoreCase(allUserIds.get(j + 1)) > 0) {
+                    String temp = allUserIds.get(j);
+                    allUserIds.set(j, allUserIds.get(j + 1));
+                    allUserIds.set(j + 1, temp);
+                }
+            }
+        }
+
+        // Binary Search
+        int left = 0;
+        int right = allUserIds.size() - 1;
+        boolean found = false;
+
+        while (left <= right && !found) {
+            int mid = (left + right) / 2;
+            String currentId = allUserIds.get(mid).toLowerCase();
+
+            if (currentId.contains(searchId.toLowerCase())) {
+                // Show games for this user
+                DefaultTableModel model = (DefaultTableModel) jTable2.getModel();
+                model.setRowCount(0);
+
+                List<Game> userGames = dataManager.getUserGames().get(allUserIds.get(mid));
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+                if (userGames != null) {
+                    for (Game game : userGames) {
+                        String completionDateStr = (game.getCompletionDate() != null) ? 
+                            dateFormat.format(game.getCompletionDate()) : "N/A";
+
+                        model.addRow(new Object[]{
+                            allUserIds.get(mid),
+                            game.getTitle(),
+                            game.getGenre(),
+                            game.getPlatform(),
+                            game.getReleaseYear(),
+                            game.getHoursPlayed(),
+                            game.getCompletionStatus(),
+                            completionDateStr,
+                            game.getRating()
+                        });
+                    }
+                }
+
+                JOptionPane.showMessageDialog(this, "Games found for user!");
+                found = true;
+            } else if (currentId.compareTo(searchId.toLowerCase()) > 0) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+
+        if (!found) {
+            JOptionPane.showMessageDialog(this, "No games found for user");
+        }
+    }
+    
+    private void showAllUsers() {
+        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+        model.setRowCount(0);
+
+        // Get all users from DataManager
+        Map<String, String[]> credentials = dataManager.getUserCredentials();
+
+        for (Map.Entry<String, String[]> entry : credentials.entrySet()) {
+            model.addRow(new Object[]{
+                entry.getKey(),      // User ID
+                entry.getValue()[0], // Username
+                entry.getValue()[1]  // Password
+            });
+        }
+
+        // Clear search field
+        jTextField4.setText("");
+    }
+    
     /**
      * Creates new form AdminPanel
      */
-    public AdminPanel() {
+    public AdminPanel(GameCollection gameCollection, Map<String, List<Game>> userGames) {
+        dataManager = DataManager.getInstance();
+        this.gameCollection = gameCollection;
+        this.userGames = dataManager.getUserGames(); // FIX: Get from DataManager
+
         initComponents();
+        
+        jTable1.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) { // Double-click
+                    int row = jTable1.getSelectedRow();
+                    if (row >= 0) {
+                        // Get user data from selected row
+                        String userId = jTable1.getValueAt(row, 0).toString();
+                        String username = jTable1.getValueAt(row, 1).toString();
+                        String password = jTable1.getValueAt(row, 2).toString();
+
+                        // Fill the update fields
+                        jTextField2.setText(userId);
+                        jTextField3.setText(username);
+                        jPasswordField1.setText(password);
+
+                        // Show instruction message
+                        JOptionPane.showMessageDialog(AdminPanel.this,
+                            "User loaded for update:\n" +
+                            "User ID: " + userId + "\n" +
+                            "Current Username: " + username + "\n" +
+                            "Current Password: " + password + "\n\n" +
+                            "Instructions:\n" +
+                            "1. Leave username field empty to keep current username\n" +
+                            "2. Leave password field empty to keep current password\n" +
+                            "3. Fill both to update both",
+                            "Update User",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                        // Switch to Update Lists tab
+                        showCard("card4");
+                    }
+                }
+            }
+        });
+        
+        refreshUserTable();
+        refreshGameTable();
     }
+
+        private void initializeSampleCredentials() {
+            userCredentials.put("U001", new String[]{"john_doe", "password123"});
+            userCredentials.put("U002", new String[]{"jane_smith", "pass456"});
+            userCredentials.put("U003", new String[]{"bob_wilson", "secret789"});
+            userCredentials.put("U004", new String[]{"alice_brown", "admin123"});
+        }
+
+
+
+    
+    private void addGameForUser(String userId, Game game) {
+        gameCollection.addGame(game);
+        userGames.computeIfAbsent(userId, k -> new java.util.ArrayList<>()).add(game);
+    }
+    
+    private void addSampleGames() {
+        Calendar cal = Calendar.getInstance();
+
+        cal.set(2023, Calendar.OCTOBER, 15);
+        addGameForUser("U001", new Game("Minecraft", "Sandbox", "PC", 2011, 250, "Completed", cal.getTime(), 5));
+
+        cal.set(2023, Calendar.DECEMBER, 5);
+        addGameForUser("U002", new Game("God of War", "Action", "PlayStation", 2018, 45, "Completed", cal.getTime(), 5));
+
+        cal.set(2024, Calendar.FEBRUARY, 20);
+        addGameForUser("U002", new Game("The Last of Us", "Survival", "PlayStation", 2013, 25, "Completed", cal.getTime(), 5));
+
+        addGameForUser("U003", new Game("Red Dead Redemption 2", "Action-Adventure", "PlayStation", 2018, 80, "In Progress", null, 5));
+
+        cal.set(2024, Calendar.APRIL, 15);
+        addGameForUser("U004", new Game("Resident Evil 4", "Horror", "PC", 2023, 35, "Completed", cal.getTime(), 4));
+    }
+
+        private void refreshUserTable() {
+        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+        model.setRowCount(0);
+
+        // Get credentials from DataManager
+        Map<String, String[]> credentials = dataManager.getUserCredentials();
+
+        for (Map.Entry<String, String[]> entry : credentials.entrySet()) {
+            String userId = entry.getKey();
+            String[] creds = entry.getValue();
+
+            model.addRow(new Object[]{
+                userId,
+                creds[0], // username
+                creds[1]  // password
+            });
+        }
+    }
+
+    
+    private void refreshGameTable() {
+        DefaultTableModel model = (DefaultTableModel) jTable2.getModel();
+        model.setRowCount(0); // Clear existing rows
+
+        // Use dataManager.getUserGames() instead of userGames
+        Map<String, List<Game>> allUserGames = dataManager.getUserGames();
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+        for (Map.Entry<String, List<Game>> entry : allUserGames.entrySet()) {
+            String userId = entry.getKey();
+
+            for (Game g : entry.getValue()) {
+                String completionDateStr = (g.getCompletionDate() != null) ? 
+                    dateFormat.format(g.getCompletionDate()) : "N/A";
+
+                model.addRow(new Object[]{
+                        userId,
+                        g.getTitle(),
+                        g.getGenre(),
+                        g.getPlatform(),
+                        g.getReleaseYear(),
+                        g.getHoursPlayed(),
+                        g.getCompletionStatus(),
+                        completionDateStr,
+                        g.getRating()
+                });
+            }
+        }
+    }
+    
 
     /**
      * This method is called from within the constructor to initialize the form.
@@ -47,12 +333,16 @@ public class AdminPanel extends javax.swing.JFrame {
         jLabel3 = new javax.swing.JLabel();
         jLabel4 = new javax.swing.JLabel();
         jTextField1 = new javax.swing.JTextField();
+        jButton8 = new javax.swing.JButton();
+        jTextField4 = new javax.swing.JTextField();
         jButton5 = new javax.swing.JButton();
         SubContainer2 = new javax.swing.JPanel();
         jPanel3 = new javax.swing.JPanel();
         jScrollPane2 = new javax.swing.JScrollPane();
         jTable2 = new javax.swing.JTable();
         jLabel5 = new javax.swing.JLabel();
+        jTextField5 = new javax.swing.JTextField();
+        jButton10 = new javax.swing.JButton();
         SubContainer3 = new javax.swing.JPanel();
         jLabel6 = new javax.swing.JLabel();
         jLabel7 = new javax.swing.JLabel();
@@ -61,6 +351,9 @@ public class AdminPanel extends javax.swing.JFrame {
         jTextField3 = new javax.swing.JTextField();
         jButton6 = new javax.swing.JButton();
         jButton7 = new javax.swing.JButton();
+        jPasswordField1 = new javax.swing.JPasswordField();
+        jLabel9 = new javax.swing.JLabel();
+        jButton9 = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -90,7 +383,7 @@ public class AdminPanel extends javax.swing.JFrame {
         jButton3.setBackground(new java.awt.Color(0, 40, 66));
         jButton3.setFont(new java.awt.Font("Tw Cen MT", 0, 14)); // NOI18N
         jButton3.setForeground(new java.awt.Color(116, 227, 255));
-        jButton3.setText("Update Game Lists");
+        jButton3.setText("Update Lists");
         jButton3.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButton3ActionPerformed(evt);
@@ -193,9 +486,15 @@ public class AdminPanel extends javax.swing.JFrame {
 
         jTextField1.setFont(new java.awt.Font("Verdana", 0, 12)); // NOI18N
 
-        jButton5.setBackground(new java.awt.Color(151, 53, 53));
-        jButton5.setFont(new java.awt.Font("Verdana", 0, 12)); // NOI18N
-        jButton5.setText("Delete User");
+        jButton8.setBackground(new java.awt.Color(0, 153, 255));
+        jButton8.setText("View User");
+        jButton8.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton8ActionPerformed(evt);
+            }
+        });
+
+        jButton5.setText("Search");
         jButton5.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButton5ActionPerformed(evt);
@@ -207,35 +506,47 @@ public class AdminPanel extends javax.swing.JFrame {
         SubContainer1Layout.setHorizontalGroup(
             SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(SubContainer1Layout.createSequentialGroup()
-                .addContainerGap()
                 .addGroup(SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jScrollPane1)
                     .addGroup(SubContainer1Layout.createSequentialGroup()
-                        .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 230, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap()
+                        .addGroup(SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 690, Short.MAX_VALUE)
+                            .addGroup(SubContainer1Layout.createSequentialGroup()
+                                .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 230, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(0, 0, Short.MAX_VALUE))))
+                    .addGroup(SubContainer1Layout.createSequentialGroup()
+                        .addGap(207, 207, 207)
+                        .addComponent(jLabel4)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jButton8, javax.swing.GroupLayout.PREFERRED_SIZE, 106, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
             .addGroup(SubContainer1Layout.createSequentialGroup()
-                .addGap(207, 207, 207)
-                .addComponent(jLabel4)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(102, 102, 102)
+                .addComponent(jTextField4, javax.swing.GroupLayout.PREFERRED_SIZE, 250, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
-                .addComponent(jButton5)
-                .addContainerGap(206, Short.MAX_VALUE))
+                .addComponent(jButton5, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         SubContainer1Layout.setVerticalGroup(
             SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, SubContainer1Layout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 400, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jTextField4, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButton5, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(19, 19, 19)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 350, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(38, 38, 38)
                 .addGroup(SubContainer1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jButton5))
-                .addContainerGap(44, Short.MAX_VALUE))
+                    .addComponent(jButton8))
+                .addContainerGap(42, Short.MAX_VALUE))
         );
 
         Container.add(SubContainer1, "card2");
@@ -258,6 +569,13 @@ public class AdminPanel extends javax.swing.JFrame {
         jLabel5.setFont(new java.awt.Font("Trebuchet MS", 0, 36)); // NOI18N
         jLabel5.setText("Games");
 
+        jButton10.setText("Search");
+        jButton10.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton10ActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
         jPanel3Layout.setHorizontalGroup(
@@ -270,15 +588,25 @@ public class AdminPanel extends javax.swing.JFrame {
                         .addGap(0, 0, Short.MAX_VALUE))
                     .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 684, Short.MAX_VALUE))
                 .addContainerGap())
+            .addGroup(jPanel3Layout.createSequentialGroup()
+                .addGap(170, 170, 170)
+                .addComponent(jTextField5, javax.swing.GroupLayout.PREFERRED_SIZE, 250, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jButton10, javax.swing.GroupLayout.PREFERRED_SIZE, 81, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
                 .addGap(16, 16, 16)
                 .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 461, Short.MAX_VALUE)
-                .addGap(32, 32, 32))
+                .addGap(18, 18, 18)
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jTextField5, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButton10, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(30, 30, 30)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 400, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(26, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout SubContainer2Layout = new javax.swing.GroupLayout(SubContainer2);
@@ -314,13 +642,13 @@ public class AdminPanel extends javax.swing.JFrame {
         });
 
         jLabel8.setFont(new java.awt.Font("Times New Roman", 0, 18)); // NOI18N
-        jLabel8.setText("Title :");
+        jLabel8.setText("Username:");
 
         jTextField3.setFont(new java.awt.Font("Times New Roman", 0, 18)); // NOI18N
 
         jButton6.setBackground(new java.awt.Color(116, 227, 255));
         jButton6.setFont(new java.awt.Font("Rockwell", 0, 14)); // NOI18N
-        jButton6.setText("Add to Games");
+        jButton6.setText("Add User");
         jButton6.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButton6ActionPerformed(evt);
@@ -329,10 +657,27 @@ public class AdminPanel extends javax.swing.JFrame {
 
         jButton7.setBackground(new java.awt.Color(151, 53, 53));
         jButton7.setFont(new java.awt.Font("Rockwell", 0, 14)); // NOI18N
-        jButton7.setText("Delete from Games");
+        jButton7.setText("Delete User");
         jButton7.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButton7ActionPerformed(evt);
+            }
+        });
+
+        jPasswordField1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jPasswordField1ActionPerformed(evt);
+            }
+        });
+
+        jLabel9.setFont(new java.awt.Font("Times New Roman", 0, 18)); // NOI18N
+        jLabel9.setText("Password:");
+
+        jButton9.setFont(new java.awt.Font("Rockwell", 0, 14)); // NOI18N
+        jButton9.setText("Update User");
+        jButton9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton9ActionPerformed(evt);
             }
         });
 
@@ -347,23 +692,25 @@ public class AdminPanel extends javax.swing.JFrame {
                         .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                                 .addComponent(jLabel6, javax.swing.GroupLayout.PREFERRED_SIZE, 300, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addComponent(jLabel7, javax.swing.GroupLayout.PREFERRED_SIZE, 76, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addComponent(jLabel8)
+                                    .addComponent(jLabel7, javax.swing.GroupLayout.PREFERRED_SIZE, 76, javax.swing.GroupLayout.PREFERRED_SIZE)))
                             .addGroup(SubContainer3Layout.createSequentialGroup()
                                 .addGap(224, 224, 224)
-                                .addComponent(jButton6))))
+                                .addComponent(jLabel9, javax.swing.GroupLayout.PREFERRED_SIZE, 76, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                        .addGap(19, 19, 19)
+                        .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jPasswordField1, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
+                                .addComponent(jTextField2, javax.swing.GroupLayout.Alignment.LEADING)
+                                .addComponent(jTextField3, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE))))
                     .addGroup(SubContainer3Layout.createSequentialGroup()
-                        .addGap(254, 254, 254)
-                        .addComponent(jLabel8)))
-                .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(SubContainer3Layout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGap(280, 280, 280)
                         .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(jTextField2)
-                            .addComponent(jTextField3, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE)))
-                    .addGroup(SubContainer3Layout.createSequentialGroup()
-                        .addGap(74, 74, 74)
-                        .addComponent(jButton7)))
-                .addContainerGap(122, Short.MAX_VALUE))
+                            .addComponent(jButton7, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jButton6, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jButton9, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
+                .addContainerGap(227, Short.MAX_VALUE))
         );
         SubContainer3Layout.setVerticalGroup(
             SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -378,11 +725,17 @@ public class AdminPanel extends javax.swing.JFrame {
                 .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel8, javax.swing.GroupLayout.PREFERRED_SIZE, 35, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(74, 74, 74)
+                .addGap(23, 23, 23)
                 .addGroup(SubContainer3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jButton6)
-                    .addComponent(jButton7))
-                .addContainerGap(226, Short.MAX_VALUE))
+                    .addComponent(jLabel9)
+                    .addComponent(jPasswordField1, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(26, 26, 26)
+                .addComponent(jButton6)
+                .addGap(28, 28, 28)
+                .addComponent(jButton7)
+                .addGap(18, 18, 18)
+                .addComponent(jButton9)
+                .addContainerGap(125, Short.MAX_VALUE))
         );
 
         Container.add(SubContainer3, "card4");
@@ -420,6 +773,16 @@ public class AdminPanel extends javax.swing.JFrame {
     private void showCard(String cardName) {
     java.awt.CardLayout cl = (java.awt.CardLayout) Container.getLayout();
     cl.show(Container, cardName);
+    
+    if (cardName.equals("card2")) { // Users tab
+        showAllUsers();
+        jTextField4.setText(""); // Clear user search
+    }
+    
+    if (cardName.equals("card3")) { // Game Lists tab
+        refreshGameTable();
+        jTextField5.setText(""); // Clear game search
+    }
 }
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
@@ -447,57 +810,199 @@ public class AdminPanel extends javax.swing.JFrame {
         new MainFrame().setVisible(true);
     }//GEN-LAST:event_jButton4ActionPerformed
 
-    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton5ActionPerformed
-        // TODO add your handling code here:
-        String userId = jTextField1.getText().trim();
-
-    if (userId.isEmpty()) {
-        JOptionPane.showMessageDialog(this, "Please enter a User ID");
-        return;
-    }
-
-    // TEMP logic (replace later with actual data structure removal)
-    JOptionPane.showMessageDialog(this, 
-        "User with ID " + userId + " deleted successfully");
-
-    jTextField1.setText("");
-    }//GEN-LAST:event_jButton5ActionPerformed
-
     private void jButton6ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton6ActionPerformed
         // TODO add your handling code here:
         String userId = jTextField2.getText().trim();
-        String title = jTextField3.getText().trim();
+        String username = jTextField3.getText().trim();
+        String password = new String(jPasswordField1.getPassword()).trim();
 
-        if (userId.isEmpty() || title.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please fill all fields");
+        if (userId.isEmpty() || username.isEmpty() || password.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "User ID, Username, and Password are required");
             return;
         }
 
-        // TEMP logic (replace later with GameCollection.addGame())
-        JOptionPane.showMessageDialog(this,
-            title + " added for " + userId);
+        // Check duplicate User ID
+        if (dataManager.getUserCredentials().containsKey(userId)) {
+            JOptionPane.showMessageDialog(this, "User ID already exists");
+            return;
+        }
+
+        // Add user through DataManager (you need to add this method to DataManager)
+        dataManager.getUserCredentials().put(userId, new String[]{username, password});
+        dataManager.getUserGames().put(userId, new java.util.ArrayList<>());
+
+        JOptionPane.showMessageDialog(this, "User added successfully");
 
         jTextField2.setText("");
         jTextField3.setText("");
+        jPasswordField1.setText("");
+
+        refreshUserTable();
+        refreshGameTable();
     }//GEN-LAST:event_jButton6ActionPerformed
 
     private void jButton7ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton7ActionPerformed
         // TODO add your handling code here:
         String userId = jTextField2.getText().trim();
-        String title = jTextField3.getText().trim();
-
-        if (userId.isEmpty() || title.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please fill all fields");
+        
+        if (userId.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter User ID only");
             return;
         }
 
-        // TEMP logic (replace later with GameCollection.removeGame())
-        JOptionPane.showMessageDialog(this,
-            title + " removed for " + userId);
+        if (!dataManager.getUserCredentials().containsKey(userId)) {
+            JOptionPane.showMessageDialog(this, "User ID not found");
+            return;
+        }
+
+        // Confirm deletion
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Are you sure you want to delete user " + userId + "?\nThis will also delete all their games.",
+            "Confirm Delete", 
+            JOptionPane.YES_NO_OPTION);
+
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        // Delete user from DataManager
+        dataManager.deleteUser(userId);
+
+        JOptionPane.showMessageDialog(this, "User deleted successfully");
+
+        // Clear fields
+        jTextField2.setText("");
+        jTextField3.setText("");
+        jPasswordField1.setText("");
+
+        // Refresh tables
+        refreshUserTable();
+        refreshGameTable();
+    }//GEN-LAST:event_jButton7ActionPerformed
+
+    private void jButton8ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton8ActionPerformed
+        // TODO add your handling code here:
+         String userId = jTextField1.getText().trim();
+
+        if (userId.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter a User ID");
+            return;
+        }
+
+        // Get user info from DataManager
+        Map<String, String[]> credentials = dataManager.getUserCredentials();
+        String[] creds = credentials.get(userId);
+
+        if (creds == null) {
+            JOptionPane.showMessageDialog(this, "User not found");
+            return;
+        }
+
+        String username = creds[0];
+        String password = creds[1];
+
+        StringBuilder gameInfo = new StringBuilder();
+
+        // Get games from DataManager
+        Map<String, List<Game>> allUserGames = dataManager.getUserGames();
+        List<Game> games = allUserGames.get(userId);
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+        if (games != null && !games.isEmpty()) {
+            for (Game g : games) {
+                String completionDateStr = (g.getCompletionDate() != null) ? 
+                    dateFormat.format(g.getCompletionDate()) : "N/A";
+
+                gameInfo.append("\nTitle: ").append(g.getTitle())
+                        .append("\nGenre: ").append(g.getGenre())
+                        .append("\nPlatform: ").append(g.getPlatform())
+                        .append("\nRelease Year: ").append(g.getReleaseYear())
+                        .append("\nHours Played: ").append(g.getHoursPlayed())
+                        .append("\nRating: ").append(g.getRating())
+                        .append("\nCompletion Status: ").append(g.getCompletionStatus())
+                        .append("\nCompletion Date: ").append(completionDateStr)
+                        .append("\n----------------------");
+            }
+        } else {
+            gameInfo.append("\nNo games found.");
+    }
+
+    JOptionPane.showMessageDialog(this,
+            "User Details\n\n" +
+                    "User ID: " + userId +
+                    "\nUsername: " + username +
+                    "\nPassword: " + password +
+                    "\n\nGames Owned:" + gameInfo
+    );
+    }//GEN-LAST:event_jButton8ActionPerformed
+
+    private void jPasswordField1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jPasswordField1ActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jPasswordField1ActionPerformed
+
+    private void jButton9ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton9ActionPerformed
+        // TODO add your handling code here:
+         String userId = jTextField2.getText().trim();
+        String username = jTextField3.getText().trim();
+        String password = new String(jPasswordField1.getPassword()).trim();
+
+        if (userId.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "User ID is required");
+            return;
+        }
+
+        Map<String, String[]> credentials = dataManager.getUserCredentials();
+
+        if (!credentials.containsKey(userId)) {
+            JOptionPane.showMessageDialog(this, "User ID not found. Cannot update non-existent user.");
+            return;
+        }
+
+        String[] currentCreds = credentials.get(userId);
+        String currentUsername = currentCreds[0];
+        String currentPassword = currentCreds[1];
+
+        String newUsername = username.isEmpty() ? currentUsername : username;
+        String newPassword = password.isEmpty() ? currentPassword : password;
+
+        boolean usernameChanged = !newUsername.equals(currentUsername);
+        boolean passwordChanged = !newPassword.equals(currentPassword);
+
+        if (!usernameChanged && !passwordChanged) {
+            JOptionPane.showMessageDialog(this, "No changes detected. Both username and password are the same as before.");
+            return;
+        }
+
+        credentials.put(userId, new String[]{newUsername, newPassword});
+
+        StringBuilder message = new StringBuilder("User updated successfully");
+        if (usernameChanged && passwordChanged) {
+            message.append(": Username and Password updated");
+        } else if (usernameChanged) {
+            message.append(": Username updated (Password unchanged)");
+        } else if (passwordChanged) {
+            message.append(": Password updated (Username unchanged)");
+        }
+
+        JOptionPane.showMessageDialog(this, message.toString());
 
         jTextField2.setText("");
         jTextField3.setText("");
-    }//GEN-LAST:event_jButton7ActionPerformed
+        jPasswordField1.setText("");
+
+        refreshUserTable();
+    }//GEN-LAST:event_jButton9ActionPerformed
+
+    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton5ActionPerformed
+        // TODO add your handling code here:
+        searchUserById();
+    }//GEN-LAST:event_jButton5ActionPerformed
+
+    private void jButton10ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton10ActionPerformed
+        // TODO add your handling code here:
+        searchGamesByUserId();
+    }//GEN-LAST:event_jButton10ActionPerformed
 
     /**
      * @param args the command line arguments
@@ -510,12 +1015,15 @@ public class AdminPanel extends javax.swing.JFrame {
     private javax.swing.JPanel SubContainer2;
     private javax.swing.JPanel SubContainer3;
     private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton10;
     private javax.swing.JButton jButton2;
     private javax.swing.JButton jButton3;
     private javax.swing.JButton jButton4;
     private javax.swing.JButton jButton5;
     private javax.swing.JButton jButton6;
     private javax.swing.JButton jButton7;
+    private javax.swing.JButton jButton8;
+    private javax.swing.JButton jButton9;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
@@ -524,9 +1032,11 @@ public class AdminPanel extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel6;
     private javax.swing.JLabel jLabel7;
     private javax.swing.JLabel jLabel8;
+    private javax.swing.JLabel jLabel9;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
+    private javax.swing.JPasswordField jPasswordField1;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JTable jTable1;
@@ -534,5 +1044,7 @@ public class AdminPanel extends javax.swing.JFrame {
     private javax.swing.JTextField jTextField1;
     private javax.swing.JTextField jTextField2;
     private javax.swing.JTextField jTextField3;
+    private javax.swing.JTextField jTextField4;
+    private javax.swing.JTextField jTextField5;
     // End of variables declaration//GEN-END:variables
 }
